@@ -188,7 +188,7 @@ export function ProvidersTab() {
                     >
                       {result.ok
                         ? result.verification === 'configured'
-                          ? `✓ Ready (${result.modelCount ?? 0} configured models; connection verifies on first message)`
+                          ? `✓ Ready (${result.modelCount ?? 0} configured model${result.modelCount === 1 ? '' : 's'}; connection verifies on first message)`
                           : `✓ Test ok (${result.modelCount ?? 0} models available)`
                         : `✗ ${result.error ?? 'Test failed.'}`}
                     </p>
