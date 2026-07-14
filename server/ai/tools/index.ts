@@ -14,6 +14,7 @@
  * Capability filtering: `selectToolsForScope` takes the caller's capability
  * set and filters through `toolAllowedForCapabilities` — write tools need
  * `ai.tools.write`, and any tool declaring `requiredCapabilities` (ANY-OF,
+ * optionally combined with `requiredAllCapabilities`),
  * mirroring its HTTP-route equivalent) is only offered to callers holding
  * one. A `ai.chat`-only user (e.g. a Client persona granted chat) cannot
  * have the model issue a call the user couldn't make over HTTP — gated

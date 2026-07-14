@@ -31,6 +31,16 @@ import {
   MoveNodeInputSchema,
   RenameNodeInputSchema,
   DuplicateNodeInputSchema,
+  CreateVisualComponentInputSchema,
+  ComponentizeNodeInputSchema,
+  UpsertComponentParamInputSchema,
+  ExposeComponentParamInputSchema,
+  BindComponentParamInputSchema,
+  AddComponentSlotInputSchema,
+  InsertComponentInstanceInputSchema,
+  SetComponentInstanceOverridesInputSchema,
+  CreateExplorerFolderInputSchema,
+  MoveExplorerItemInputSchema,
   ApplyCssInputSchema,
   AssignClassInputSchema,
   RemoveClassInputSchema,
@@ -180,6 +190,110 @@ const duplicateNodeTool: AiTool = {
   description:
     "Deep-clone a node + subtree (props, classIds, breakpoint overrides) right after the original. `count` (1-50, default 1) produces N clones in one call. Success data includes the first new node id as `nodeId` and all new ids as `nodeIds`.",
   inputSchema: DuplicateNodeInputSchema,
+}
+
+// ---------------------------------------------------------------------------
+// Visual Components + decorative Explorer organization
+// ---------------------------------------------------------------------------
+
+const createVisualComponentTool: AiTool = {
+  name: 'site_create_visual_component',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Create an empty Visual Component and open it for editing. Optionally place it in an existing Components folder in the same undo/save transaction. Returns componentId and rootNodeId. Build its body with site_insert_html using rootNodeId.',
+  inputSchema: CreateVisualComponentInputSchema,
+}
+
+const componentizeNodeTool: AiTool = {
+  name: 'site_componentize_node',
+  scope: 'site',
+  execution: 'browser',
+  requiredAllCapabilities: ['site.structure.edit', 'site.style.edit'],
+  description:
+    'Convert an existing page node subtree into a Visual Component, replace the source with an instance, and open the component. Requires both structure and style permissions because node-scoped class ownership may be remapped. Optionally place the component in an existing Components folder. Returns componentId, rootNodeId, and refNodeId.',
+  inputSchema: ComponentizeNodeInputSchema,
+}
+
+const upsertComponentParamTool: AiTool = {
+  name: 'site_upsert_component_param',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Create or update one typed Visual Component parameter atomically. Omit paramId to create (name and type required); pass paramId to update name/default/metadata. Existing parameter types cannot be changed. Slots are authored with site_add_component_slot. Returns the complete parameter readback.',
+  inputSchema: UpsertComponentParamInputSchema,
+}
+
+const exposeComponentParamTool: AiTool = {
+  name: 'site_expose_component_param',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Atomically create a Visual Component parameter from an actual node property and bind it. The parameter type, default value, and enum options are derived from the module property schema, preventing incompatible bindings. Returns paramId and binding readback.',
+  inputSchema: ExposeComponentParamInputSchema,
+}
+
+const bindComponentParamTool: AiTool = {
+  name: 'site_bind_component_param',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Bind an existing compatible component parameter to one property of a node inside that same component. Rejects missing properties, incompatible types, foreign nodes, and properties with dynamic bindings. Returns binding readback.',
+  inputSchema: BindComponentParamInputSchema,
+}
+
+const addComponentSlotTool: AiTool = {
+  name: 'site_add_component_slot',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Insert a named slot outlet into a Visual Component. The outlet is the slot source of truth; existing instances are synchronized in the same undo transaction. Slot names must be unique within the component. Returns slotNodeId.',
+  inputSchema: AddComponentSlotInputSchema,
+}
+
+const insertComponentInstanceTool: AiTool = {
+  name: 'site_insert_component_instance',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Insert a Visual Component instance under a page or component parent. Initial parameter overrides and materialized slot instances are committed atomically. Validates override parameter IDs and prevents component cycles. Returns refNodeId and effective overrides.',
+  inputSchema: InsertComponentInstanceInputSchema,
+}
+
+const setComponentInstanceOverridesTool: AiTool = {
+  name: 'site_set_component_instance_overrides',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Merge parameter-id overrides onto an existing Visual Component instance without erasing sibling overrides. Every key must identify a non-slot parameter on the referenced component. Returns the complete effective override bag.',
+  inputSchema: SetComponentInstanceOverridesInputSchema,
+}
+
+const createExplorerFolderTool: AiTool = {
+  name: 'site_create_explorer_folder',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Create a decorative Explorer folder in the components or templates section. Returns folderId. This does not delete, rename, or move any existing item.',
+  inputSchema: CreateExplorerFolderInputSchema,
+}
+
+const moveExplorerItemTool: AiTool = {
+  name: 'site_move_explorer_item',
+  scope: 'site',
+  execution: 'browser',
+  requiredCapabilities: SITE_STRUCTURE_CAPS,
+  description:
+    'Move one existing component or template Explorer item into an existing folder, or omit folderId to move it to the section root. Returns placement readback.',
+  inputSchema: MoveExplorerItemInputSchema,
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +534,16 @@ export const siteWriteTools: AiTool[] = [
   moveNodeTool,
   renameNodeTool,
   duplicateNodeTool,
+  createVisualComponentTool,
+  componentizeNodeTool,
+  upsertComponentParamTool,
+  exposeComponentParamTool,
+  bindComponentParamTool,
+  addComponentSlotTool,
+  insertComponentInstanceTool,
+  setComponentInstanceOverridesTool,
+  createExplorerFolderTool,
+  moveExplorerItemTool,
   applyCssTool,
   assignClassTool,
   removeClassTool,

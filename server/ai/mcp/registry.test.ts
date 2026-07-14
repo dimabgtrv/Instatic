@@ -41,15 +41,32 @@ describe('mcp registry', () => {
     expect(names).not.toContain('mutate_page_tree')
   })
 
-  it('excludes the snapshot-dependent list_tokens but exposes a headless list_breakpoints', () => {
+  it('replaces snapshot-dependent token/breakpoint reads with headless versions', () => {
     const tools = mcpToolsForCapabilities(FULL)
-    const names = tools.map((t) => t.name)
-    // list_tokens reads ctx.snapshot (null over MCP) → excluded; read_styles replaces it.
-    expect(names).not.toContain('site_list_tokens')
-    // list_breakpoints is exposed, but as the HEADLESS (server-resolved) version.
+    const tokens = tools.find((t) => t.name === 'site_list_tokens')
+    expect(tokens).toBeTruthy()
+    expect(tokens!.execution).toBe('server')
     const bp = tools.find((t) => t.name === 'site_list_breakpoints')
     expect(bp).toBeTruthy()
     expect(bp!.execution).toBe('server')
+  })
+
+  it('gates component tools with existing permissions and componentize with structure + style', () => {
+    const names = (caps: typeof FULL) => mcpToolsForCapabilities(caps).map((tool) => tool.name)
+    expect(names(FULL)).toContain('site_create_visual_component')
+    expect(names(FULL)).toContain('site_componentize_node')
+    expect(names(FULL.filter((cap) => cap !== 'site.structure.edit')))
+      .not.toContain('site_create_visual_component')
+    expect(names(FULL.filter((cap) => cap !== 'site.structure.edit')))
+      .not.toContain('site_set_component_instance_overrides')
+    expect(names(FULL.filter((cap) => cap !== 'site.style.edit')))
+      .not.toContain('site_componentize_node')
+    expect(names(FULL.filter((cap) => cap !== 'ai.tools.write')))
+      .not.toContain('site_create_visual_component')
+    expect(names(FULL.filter((cap) => cap !== 'ai.tools.write')))
+      .toContain('site_inspect_visual_component')
+    expect(names(FULL.filter((cap) => cap !== 'ai.tools.write')))
+      .toContain('site_list_explorer')
   })
 
   it('prefixes resolve the old site/content list_documents collision into distinct names', () => {

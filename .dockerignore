@@ -13,6 +13,12 @@ backups
 .env.*
 !.env.example
 !.env.production.example
+*.pem
+*.crt
+*.cer
+*.key
+.certs
+certs
 docs/superpowers
 
 # Test sources are verified in CI but are not needed in production images.

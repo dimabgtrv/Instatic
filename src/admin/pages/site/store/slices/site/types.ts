@@ -213,7 +213,14 @@ export interface SiteSlice {
    *   pasting / right-clicking a leaf target).
    * - Returns the new node's id on success, or `null` on no-op / cycle prevented.
    */
-  insertComponentRef: (parentId: string, componentId: string, index?: number) => string | null
+  insertComponentRef: (
+    parentId: string,
+    componentId: string,
+    index?: number,
+    overrides?: Record<string, unknown>,
+  ) => string | null
+  /** Merge validated param-id overrides onto an existing component instance in one undo step. */
+  setComponentInstanceOverrides: (nodeId: string, overrides: Record<string, unknown>) => void
   deleteNode: (nodeId: string) => void
   /** Multi-delete: removes every id and its descendants in one undo step. */
   deleteNodes: (nodeIds: string[]) => void

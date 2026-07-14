@@ -36,6 +36,14 @@ import {
   collectSubtreeNodeIds,
   collectVCRefsFromPageSubtree,
 } from './vcTreeOps'
+import {
+  createVisualComponentAction,
+  exposeComponentParamAction,
+  placeComponentInExplorer,
+  upsertComponentParamAction,
+  type ExposeComponentParamActionInput,
+  type UpsertComponentParamActionInput,
+} from './visualComponentAuthoringActions'
 
 interface VisualComponentsSlice {
   /**
@@ -45,7 +53,7 @@ interface VisualComponentsSlice {
    * Throws VisualComponentNameError if:
    * - `name` is empty / whitespace-only, or already used by another VC in the site.
    */
-  createVisualComponent(name: string): string
+  createVisualComponent(name: string, folderId?: string): string
 
   /**
    * Rename a Visual Component.
@@ -68,6 +76,20 @@ interface VisualComponentsSlice {
    * No-op if the VC does not exist.
    */
   addParam(vcId: string, name: string, type: VCParam['type'], defaultValue?: unknown): string
+
+  /** Create or update a non-slot param in one undoable transaction. */
+  upsertComponentParam(
+    vcId: string,
+    input: UpsertComponentParamActionInput,
+  ): string
+
+  /** Create a param and bind it to a VC node property atomically. */
+  exposeComponentParam(
+    vcId: string,
+    nodeId: string,
+    propKey: string,
+    input: ExposeComponentParamActionInput,
+  ): string
 
   /**
    * Remove a param from a VC by its stable id AND clean up all references to it:
@@ -151,7 +173,7 @@ interface VisualComponentsSlice {
    *   - Source node is a base.visual-component-ref or base.body (cannot re-wrap)
    *   - nodeId is the page root
    */
-  convertNodeToComponent(nodeId: string, name: string): string
+  convertNodeToComponent(nodeId: string, name: string, folderId?: string): string
 }
 
 // ---------------------------------------------------------------------------
@@ -171,49 +193,8 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
 
   return {
 
-  createVisualComponent(name) {
-    const { site } = get()
-    if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
-
-    const validation = validateComponentName(name, site.visualComponents ?? [])
-    if (!validation.ok) {
-      throw new VisualComponentNameError(validation.reason, validation.error)
-    }
-
-    const trimmedName = name.trim()
-    const id = nanoid()
-    const rootNodeId = nanoid()
-    const now = Date.now()
-
-    const rootNode: VCNode = {
-      id: rootNodeId,
-      moduleId: 'base.body',
-      props: {},
-      children: [],
-      breakpointOverrides: {},
-      classIds: [],
-      parentId: null,
-    }
-
-    const newVC: VisualComponent = {
-      id,
-      name: trimmedName,
-      tree: {
-        nodes: { [rootNodeId]: rootNode },
-        rootNodeId,
-      },
-      params: [],
-      classIds: [],
-      createdAt: now,
-    }
-
-    mutateSiteWithExplorerReconcile((site) => {
-      if (!site.visualComponents) site.visualComponents = []
-      site.visualComponents.push(newVC)
-      return true
-    })
-
-    return id
+  createVisualComponent(name, folderId) {
+    return createVisualComponentAction(get, mutateSite, name, folderId)
   },
 
   renameVisualComponent(id, newName) {
@@ -297,6 +278,14 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
     })
 
     return paramId
+  },
+
+  upsertComponentParam(vcId, input) {
+    return upsertComponentParamAction(get, mutateSite, vcId, input)
+  },
+
+  exposeComponentParam(vcId, nodeId, propKey, input) {
+    return exposeComponentParamAction(get, mutateSite, vcId, nodeId, propKey, input)
   },
 
   removeParamWithCleanup(vcId, paramId) {
@@ -550,7 +539,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
     })
   },
 
-  convertNodeToComponent(nodeId, name) {
+  convertNodeToComponent(nodeId, name, folderId) {
     const { activeDocument, activePageId, site } = get()
 
     if (!site) throw new Error('[visualComponentsSlice] Site document is not initialized')
@@ -561,6 +550,9 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
       throw new VisualComponentNameError(nameValidation.reason, nameValidation.error)
     }
     const trimmedName = name.trim()
+    if (folderId && !site.explorer.components.folders.some((folder) => folder.id === folderId)) {
+      throw new Error(`Component folder not found: ${folderId}`)
+    }
 
     // 2. Active document must be a page (null = default page canvas) — VC mode is not allowed
     if (activeDocument?.kind === 'visualComponent') {
@@ -667,6 +659,7 @@ export const createVisualComponentsSlice: EditorStoreSliceCreator<VisualComponen
           createdAt: Date.now(),
         }
         site.visualComponents.push(newVc)
+        placeComponentInExplorer(site, newVcId, folderId)
 
         // 5e. Find the parent of the source node in the page
         let parentNode: PageNode | undefined

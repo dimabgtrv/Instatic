@@ -19,6 +19,7 @@ import { generateClassCSS, generateFrameworkCss } from '@core/publisher'
 import type { CoreCapability } from '@core/capabilities'
 import type { AiTool, ToolContext } from '../../runtime/types'
 import { getDraftSite } from '../../../repositories/site'
+import { describeAgentTokens, filterTokenFamily, type TokenFamily } from '../../tools/site/render'
 
 const SITE_READ_CAPS: readonly CoreCapability[] = [
   'site.read',
@@ -51,6 +52,28 @@ const ReadStylesInput = Type.Object(
 )
 
 export const styleMcpTools: AiTool[] = [
+  {
+    name: 'site_list_tokens',
+    description:
+      'List structured design-token metadata — colors including dark values and variants, typography and spacing groups including stable group ids, and font tokens. Headless — no open editor needed. Use this before updating an existing token scale.',
+    scope: 'site',
+    execution: 'server',
+    inputSchema: Type.Object({
+      family: Type.Optional(Type.Union([
+        Type.Literal('colors'),
+        Type.Literal('typography'),
+        Type.Literal('spacing'),
+        Type.Literal('fonts'),
+      ])),
+    }, { additionalProperties: false }),
+    requiredCapabilities: SITE_READ_CAPS,
+    handler: async (input, ctx: ToolContext) => {
+      const { family } = input as { family?: TokenFamily }
+      const site = await getDraftSite(ctx.db)
+      if (!site) return { ok: false, error: 'No site found.' }
+      return { tokens: filterTokenFamily(describeAgentTokens({ ...site, pages: [], visualComponents: [], layouts: [] }), family) }
+    },
+  },
   {
     name: 'site_read_styles',
     description:

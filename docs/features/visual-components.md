@@ -373,6 +373,33 @@ See [docs/features/publisher.md](publisher.md) for the broader pipeline.
 
 ## Cookbook
 
+### Author and reconcile VCs through MCP
+
+The MCP surface reuses the same editor-store mutations as the Site UI. Read-only
+contract inspection is headless; mutations require a connected Site workspace,
+`ai.tools.write`, and the matching Site capability.
+
+1. Inspect an existing definition with `site_inspect_visual_component`. It
+   returns stable parameter ids, bindings, slot outlets, nested refs, Explorer
+   placement, and every instance override.
+2. Create with `site_create_visual_component`, or convert a page subtree with
+   `site_componentize_node` (requires both structure and style capabilities
+   because node-scoped style ownership can move).
+3. Prefer `site_expose_component_param` to derive a compatible type/default and
+   create+bind in one undo transaction. Use `site_upsert_component_param` for
+   metadata/default changes and `site_bind_component_param` for an existing param.
+4. Add slots with `site_add_component_slot`; the slot outlet remains the source
+   of truth and existing refs synchronize in the same transaction.
+5. Insert refs with `site_insert_component_instance`; initial overrides and
+   slot instances are atomic. Merge later overrides with
+   `site_set_component_instance_overrides`.
+6. Organize the library with `site_create_explorer_folder` and
+   `site_move_explorer_item`.
+
+These tools do not expose component deletion, parameter removal, slot removal,
+or publishing. The browser bridge flushes a successful mutation before the MCP
+call returns; direct headless database mutation is intentionally unsupported.
+
 ### Author a VC with a slot
 
 1. Open the **Site → Components** panel, create a new VC.

@@ -1872,3 +1872,260 @@ describe('executeAgentTool — unknown tool name', () => {
     expect(result.error).toContain('Unknown')
   })
 })
+
+describe('executeAgentTool — Visual Component authoring', () => {
+  it('creates, organizes, exposes params, adds a slot, and inserts an overridden instance atomically', async () => {
+    const { rootId } = freshStore()
+    const folder = expectToolData<{ folder: { id: string } }>(
+      await executeAgentTool('site_create_explorer_folder', {
+        section: 'components',
+        name: 'Boxy Desktop',
+      }),
+    ).folder
+    const created = expectToolData<{ componentId: string; rootNodeId: string }>(
+      await executeAgentTool('site_create_visual_component', {
+        name: 'Agent Button',
+        folderId: folder.id,
+      }),
+    )
+    const component = useEditorStore.getState().site!.visualComponents.find(
+      (candidate) => candidate.id === created.componentId,
+    )!
+    const placement = useEditorStore.getState().site!.explorer.components.items.find(
+      (item) => item.id === created.componentId,
+    )
+    expect(placement?.parentFolderId).toBe(folder.id)
+    expect(useEditorStore.getState().activeDocument).toEqual({
+      kind: 'visualComponent',
+      vcId: created.componentId,
+    })
+
+    const inserted = expectToolData<{
+      created: Array<{ id: string; moduleId: string }>
+    }>(await executeAgentTool('site_insert_html', {
+      parentId: created.rootNodeId,
+      html: '<button>Continue</button>',
+    }))
+    const buttonId = inserted.created.find((node) => node.moduleId === 'base.button')!.id
+
+    const historyBeforeExpose = useEditorStore.getState()._historyPast.length
+    const label = expectToolData<{ paramId: string }>(
+      await executeAgentTool('site_expose_component_param', {
+        componentId: created.componentId,
+        nodeId: buttonId,
+        propKey: 'label',
+        name: 'Label',
+      }),
+    )
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBeforeExpose + 1)
+
+    const disabled = expectToolData<{ paramId: string }>(
+      await executeAgentTool('site_expose_component_param', {
+        componentId: created.componentId,
+        nodeId: buttonId,
+        propKey: 'disabled',
+        name: 'Disabled',
+      }),
+    )
+    const currentComponent = useEditorStore.getState().site!.visualComponents.find(
+      (candidate) => candidate.id === created.componentId,
+    )!
+    expect(currentComponent.params.find((param) => param.id === label.paramId)?.defaultValue).toBe('Continue')
+    expect(currentComponent.params.find((param) => param.id === disabled.paramId)?.type).toBe('boolean')
+    expect(currentComponent.tree.nodes[buttonId].propBindings?.label?.paramId).toBe(label.paramId)
+
+    const historyBeforeSlot = useEditorStore.getState()._historyPast.length
+    const slot = expectToolData<{ slotNodeId: string }>(
+      await executeAgentTool('site_add_component_slot', {
+        componentId: created.componentId,
+        parentNodeId: created.rootNodeId,
+        slotName: 'after',
+      }),
+    )
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBeforeSlot + 1)
+    expect(currentComponent.tree.nodes[slot.slotNodeId]).toBeUndefined() // frozen pre-mutation reference
+
+    useEditorStore.getState().openPageInCanvas(useEditorStore.getState().activePageId!)
+    const historyBeforeInstance = useEditorStore.getState()._historyPast.length
+    const instance = expectToolData<{
+      refNodeId: string
+      overrides: Record<string, unknown>
+      slots: Array<{ slotName: string; nodeId: string }>
+    }>(
+      await executeAgentTool('site_insert_component_instance', {
+        parentId: rootId,
+        componentId: created.componentId,
+        overrides: {
+          [label.paramId]: 'Start',
+          [disabled.paramId]: false,
+        },
+      }),
+    )
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBeforeInstance + 1)
+    expect(instance.overrides[label.paramId]).toBe('Start')
+    expect(instance.slots).toEqual([
+      expect.objectContaining({ slotName: 'after' }),
+    ])
+    const ref = activePage().nodes[instance.refNodeId]
+    expect(ref.children).toHaveLength(1)
+    expect(activePage().nodes[ref.children[0]].moduleId).toBe('base.slot-instance')
+
+    await executeAgentTool('site_set_component_instance_overrides', {
+      nodeId: instance.refNodeId,
+      overrides: { [label.paramId]: 'Updated' },
+    })
+    const merged = activePage().nodes[instance.refNodeId].props.propOverrides as Record<string, unknown>
+    expect(merged[label.paramId]).toBe('Updated')
+    expect(merged[disabled.paramId]).toBe(false)
+  })
+
+  it('rejects incompatible bindings and component cycles before mutation', async () => {
+    const { rootId } = freshStore()
+    const created = expectToolData<{ componentId: string; rootNodeId: string }>(
+      await executeAgentTool('site_create_visual_component', { name: 'Guarded Component' }),
+    )
+    const inserted = expectToolData<{ created: Array<{ id: string; moduleId: string }> }>(
+      await executeAgentTool('site_insert_html', {
+        parentId: created.rootNodeId,
+        html: '<button>Guard</button>',
+      }),
+    )
+    const buttonId = inserted.created.find((node) => node.moduleId === 'base.button')!.id
+    const numberParam = expectToolData<{ param: { id: string } }>(
+      await executeAgentTool('site_upsert_component_param', {
+        componentId: created.componentId,
+        name: 'Count',
+        type: 'number',
+        defaultValue: 1,
+      }),
+    ).param
+    const historyBefore = useEditorStore.getState()._historyPast.length
+    expectToolError(await executeAgentTool('site_bind_component_param', {
+      componentId: created.componentId,
+      nodeId: buttonId,
+      propKey: 'label',
+      paramId: numberParam.id,
+    }))
+    expectToolError(await executeAgentTool('site_insert_component_instance', {
+      parentId: created.rootNodeId,
+      componentId: created.componentId,
+    }))
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBefore)
+
+    // A foreign page target auto-navigates correctly rather than writing into the VC tree.
+    useEditorStore.getState().openPageInCanvas(useEditorStore.getState().activePageId!)
+    expect(rootId).toBe(activePage().rootNodeId)
+  })
+
+  it('rejects invalid instance parents without recording history', async () => {
+    const { rootId } = freshStore()
+    const component = expectToolData<{ componentId: string }>(
+      await executeAgentTool('site_create_visual_component', { name: 'Parent Guard' }),
+    )
+    useEditorStore.getState().openPageInCanvas(useEditorStore.getState().activePageId!)
+    const buttonId = expectNodeIds(await executeAgentTool('site_insert_html', {
+      parentId: rootId,
+      html: '<button>Leaf</button>',
+    }))[0]
+    const historyBeforeLeaf = useEditorStore.getState()._historyPast.length
+    expectToolError(await executeAgentTool('site_insert_component_instance', {
+      parentId: buttonId,
+      componentId: component.componentId,
+    }))
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBeforeLeaf)
+
+    const first = expectToolData<{ refNodeId: string }>(
+      await executeAgentTool('site_insert_component_instance', {
+        parentId: rootId,
+        componentId: component.componentId,
+      }),
+    )
+    const historyBeforeRef = useEditorStore.getState()._historyPast.length
+    expectToolError(await executeAgentTool('site_insert_component_instance', {
+      parentId: first.refNodeId,
+      componentId: component.componentId,
+    }))
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBeforeRef)
+  })
+
+  it('uses canonical typed defaults and rejects invalid component parameter contracts', async () => {
+    freshStore()
+    const componentId = expectToolData<{ componentId: string }>(
+      await executeAgentTool('site_create_visual_component', { name: 'Typed Params' }),
+    ).componentId
+
+    const enabled = expectToolData<{ param: { defaultValue: unknown } }>(
+      await executeAgentTool('site_upsert_component_param', {
+        componentId,
+        name: 'Enabled',
+        type: 'boolean',
+      }),
+    ).param
+    const count = expectToolData<{ param: { defaultValue: unknown } }>(
+      await executeAgentTool('site_upsert_component_param', {
+        componentId,
+        name: 'Count',
+        type: 'number',
+      }),
+    ).param
+    expect(enabled.defaultValue).toBe(false)
+    expect(count.defaultValue).toBe(0)
+
+    const invalidCases = [
+      { name: 'Bad number', type: 'number', defaultValue: '1' },
+      { name: 'Bad boolean', type: 'boolean', defaultValue: 'false' },
+      { name: 'Empty enum', type: 'enum', defaultValue: 'a', enumOptions: [] },
+      { name: 'Bad enum', type: 'enum', defaultValue: 'b', enumOptions: ['a'] },
+    ]
+    for (const input of invalidCases) {
+      const historyBefore = useEditorStore.getState()._historyPast.length
+      expectToolError(await executeAgentTool('site_upsert_component_param', { componentId, ...input }))
+      expect(useEditorStore.getState()._historyPast.length).toBe(historyBefore)
+    }
+  })
+
+  it('componentizes a page subtree and places the new component in one history entry', async () => {
+    const { rootId } = freshStore()
+    const sectionId = expectNodeIds(await executeAgentTool('site_insert_html', {
+      parentId: rootId,
+      html: '<section><h2>Card</h2></section>',
+    }))[0]
+    const folderId = expectToolData<{ folder: { id: string } }>(
+      await executeAgentTool('site_create_explorer_folder', {
+        section: 'components',
+        name: 'Cards',
+      }),
+    ).folder.id
+    const historyBefore = useEditorStore.getState()._historyPast.length
+    const result = expectToolData<{ componentId: string; refNodeId: string }>(
+      await executeAgentTool('site_componentize_node', {
+        nodeId: sectionId,
+        name: 'Agent Card',
+        folderId,
+      }),
+    )
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBefore + 1)
+    const site = useEditorStore.getState().site!
+    expect(site.explorer.components.items.find((item) => item.id === result.componentId)?.parentFolderId)
+      .toBe(folderId)
+    expect(site.pages[0].nodes[result.refNodeId].props.componentId).toBe(result.componentId)
+  })
+
+  it('rejects componentizing CMS-bound content that cannot be preserved', async () => {
+    const { rootId } = freshStore()
+    const sectionId = expectNodeIds(await executeAgentTool('site_insert_html', {
+      parentId: rootId,
+      html: '<section>Dynamic</section>',
+    }))[0]
+    useEditorStore.getState().setNodeDynamicBinding(sectionId, 'tag', {
+      source: 'currentEntry',
+      field: 'title',
+    })
+    const historyBefore = useEditorStore.getState()._historyPast.length
+    expectToolError(await executeAgentTool('site_componentize_node', {
+      nodeId: sectionId,
+      name: 'Dynamic Section',
+    }))
+    expect(useEditorStore.getState()._historyPast.length).toBe(historyBefore)
+  })
+})

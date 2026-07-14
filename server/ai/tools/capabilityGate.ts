@@ -4,8 +4,7 @@
  * Two independent axes, both must pass:
  *   1. Mutation: a `mutates` tool requires `ai.tools.write`.
  *   2. Scope: a tool's `requiredCapabilities` (ANY-OF) must be held by the
- *      caller. Undefined / empty means "any `ai.chat` caller" (e.g. tools
- *      that only read the browser-supplied snapshot).
+ *      caller, and every `requiredAllCapabilities` entry must be held.
  *
  * Used by `selectToolsForScope` (which tools to offer the model) and
  * re-checked in `executeAiTool` (defence in depth before dispatch).
@@ -21,6 +20,10 @@ export function toolAllowedForCapabilities(
   const required = tool.requiredCapabilities
   if (required && required.length > 0) {
     if (!required.some((cap) => capabilities.includes(cap))) return false
+  }
+  const requiredAll = tool.requiredAllCapabilities
+  if (requiredAll && requiredAll.length > 0) {
+    if (!requiredAll.every((cap) => capabilities.includes(cap))) return false
   }
   return true
 }

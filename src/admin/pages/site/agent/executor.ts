@@ -98,6 +98,7 @@ import {
   runReadDocument,
 } from './documentTools'
 import { getErrorMessage } from '@core/utils/errorMessage'
+import { runVisualComponentTool } from './visualComponentTools'
 
 // Live access to the editor store. Routed through `./storeRef` so this module
 // has no static import edge back into `editor-store/store.ts`.
@@ -205,6 +206,12 @@ const AUTO_NAVIGATE_TOOLS = new Set<string>([
   'site_duplicate_node',
   'site_assign_class',
   'site_remove_class',
+  'site_componentize_node',
+  'site_bind_component_param',
+  'site_expose_component_param',
+  'site_add_component_slot',
+  'site_insert_component_instance',
+  'site_set_component_instance_overrides',
 ])
 
 /** Pull the node/parent id a write tool targets out of its raw input bag. */
@@ -588,6 +595,9 @@ export async function executeAgentTool(
       const targetId = targetNodeIdFromInput(rawInput)
       if (targetId) focusNodeDocument(getStoreState(), targetId)
     }
+
+    const visualComponentResult = runVisualComponentTool(toolName, rawInput)
+    if (visualComponentResult) return visualComponentResult
 
     switch (toolName) {
       case 'site_insert_html':

@@ -119,6 +119,13 @@ export interface AiTool {
    */
   readonly requiredCapabilities?: readonly CoreCapability[]
   /**
+   * Capabilities that must ALL be held in addition to the legacy ANY-OF gate
+   * above. Use this only when one operation necessarily crosses independent
+   * authorization domains (for example componentizing a node can mutate both
+   * page structure and node-scoped style ownership).
+   */
+  readonly requiredAllCapabilities?: readonly CoreCapability[]
+  /**
    * Server-side handler. Required when `execution === 'server'`; ignored when
    * `execution === 'browser'` (the browser bridge runs the tool instead).
    */
@@ -207,4 +214,3 @@ export interface AiBrowserBridge {
 // Aggregated usage — drivers report token counts so the handler can persist
 // per-message + per-conversation totals and compute cost from pricing.ts.
 // ---------------------------------------------------------------------------
-

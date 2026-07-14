@@ -44,6 +44,7 @@ type NodeActions = Pick<
   SiteSlice,
   | 'insertNode'
   | 'insertComponentRef'
+  | 'setComponentInstanceOverrides'
   | 'insertImportedNodes'
   | 'deleteNode'
   | 'deleteNodes'
@@ -251,10 +252,22 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
       return insertedRootIds
     },
 
-    insertComponentRef: (parentId, componentId, index) => {
+    insertComponentRef: (parentId, componentId, index, overrides = {}) => {
       if (!componentId) return null
 
       const { activeDocument, site } = get()
+      const activeTarget = resolveActiveTreeTarget(get())
+      const parent = activeTarget?.tree.nodes[parentId]
+      if (!activeTarget || !parent) return null
+      // Direct children of a VC ref are managed slot-instance nodes only.
+      // User content/components belong inside a slot-instance, never beside it.
+      if (parent.moduleId === 'base.visual-component-ref') return null
+      if (
+        parentId !== activeTarget.tree.rootNodeId
+        && registry.get(parent.moduleId)?.canHaveChildren !== true
+      ) {
+        return null
+      }
 
       // In VC mode, guard against cyclic component references before insertion.
       if (activeDocument?.kind === 'visualComponent' && site) {
@@ -267,6 +280,7 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
       // Resolve the referenced VC up-front (read-only) so its slot-instance
       // children can be materialized in the SAME mutation as the ref insertion.
       const vc = site?.visualComponents.find((v) => v.id === componentId)
+      if (!vc) return null
 
       // Build the ref node with the module's registry defaults plus the
       // ref-specific props. `index` forwards to insertNode so callers using
@@ -275,7 +289,7 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
       const newNode = createNode('base.visual-component-ref', {
         ...(mod?.defaults ?? {}),
         componentId,
-        propOverrides: {},
+        propOverrides: { ...overrides },
       })
 
       // Insert the VC ref AND materialize its slot-instance children inside ONE
@@ -296,6 +310,23 @@ export function createNodeActions(helpers: SiteSliceHelpers): NodeActions {
       })
 
       return inserted ? newNode.id : null
+    },
+
+    setComponentInstanceOverrides: (nodeId, overrides) => {
+      mutateActiveTree((tree) => {
+        const node = tree.nodes[nodeId]
+        if (!node || node.moduleId !== 'base.visual-component-ref') return false
+        const current = node.props.propOverrides
+        const currentBag = current && typeof current === 'object' && !Array.isArray(current)
+          ? current as Record<string, unknown>
+          : {}
+        const changed = Object.entries(overrides).some(
+          ([paramId, value]) => !Object.is(currentBag[paramId], value),
+        )
+        if (!changed) return false
+        node.props.propOverrides = { ...currentBag, ...overrides }
+        return true
+      })
     },
 
     deleteNode: (nodeId) => {

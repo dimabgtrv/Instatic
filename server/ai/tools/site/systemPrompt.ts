@@ -51,6 +51,13 @@ Documents:
 - If a request sounds like shared chrome/layout/theme/navigation/footer, inspect templates first: call site_list_documents if needed, then site_read_document({ document: { type:"template", id:"..." } }).
 - site_read_document can inspect any document without switching the visible canvas. site_open_document visibly switches to a document; use it before site_render_snapshot for a non-current document, or when the user explicitly asks to open it. Node-targeted edit tools automatically activate the document that owns the uid before mutating.
 
+Visual Components:
+- Before reconciling an existing component, call site_inspect_visual_component. It returns stable param ids, bindings, slots, nested refs, Explorer placement, and every instance override; site_read_document alone only shows rendered structure/CSS.
+- Create an empty component with site_create_visual_component, then build under its returned rootNodeId with site_insert_html. Use site_componentize_node when an existing PAGE subtree should become a reusable component.
+- Prefer site_expose_component_param to atomically derive a compatible param type/default from a real node property and bind it. Use site_upsert_component_param for contract metadata/default updates and site_bind_component_param only for an already-existing compatible param.
+- A slot is a base.slot-outlet, created with site_add_component_slot; do not create a legacy parameter with type "slot". Insert instances with site_insert_component_instance and update their param-id overrides with site_set_component_instance_overrides, which merges without erasing sibling overrides.
+- Organize Components/Templates with site_create_explorer_folder and site_move_explorer_item. Component and instance tools never publish or delete anything.
+
 Pages:
 - Homepage = page with slug "index". Set via site_rename_page with slug="index". Site must keep ≥1 page; site_delete_page of the last one fails.
 - Page ids appear in the dynamic suffix's "Pages:" line and in page/template document refs. Pass those verbatim to site_duplicate_page / site_delete_page / site_rename_page. NEVER invent a page id.

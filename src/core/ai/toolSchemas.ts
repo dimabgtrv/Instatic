@@ -121,6 +121,111 @@ export const DuplicateNodeInputSchema = Type.Object({
 export type DuplicateNodeInput = Static<typeof DuplicateNodeInputSchema>
 
 // ---------------------------------------------------------------------------
+// Visual Components + decorative Explorer organization
+// ---------------------------------------------------------------------------
+
+const ComponentParamTypeInputSchema = Type.Union([
+  Type.Literal('string'),
+  Type.Literal('number'),
+  Type.Literal('boolean'),
+  Type.Literal('url'),
+  Type.Literal('enum'),
+  Type.Literal('color'),
+  Type.Literal('image'),
+  Type.Literal('richText'),
+], {
+  description: 'Public component parameter types. Slots are authored with site_add_component_slot, not legacy slot params.',
+})
+
+export const CreateVisualComponentInputSchema = Type.Object({
+  name: Type.String({ minLength: 1 }),
+  folderId: Type.Optional(Type.String({ minLength: 1 })),
+}, { additionalProperties: false })
+export type CreateVisualComponentInput = Static<typeof CreateVisualComponentInputSchema>
+
+export const ComponentizeNodeInputSchema = Type.Object({
+  nodeId: Type.String({ minLength: 1 }),
+  name: Type.String({ minLength: 1 }),
+  folderId: Type.Optional(Type.String({ minLength: 1 })),
+}, { additionalProperties: false })
+export type ComponentizeNodeInput = Static<typeof ComponentizeNodeInputSchema>
+
+/**
+ * Flat provider-compatible upsert shape. `paramId` selects update mode. The
+ * executor enforces create/update-specific required fields before mutation.
+ */
+export const UpsertComponentParamInputSchema = Type.Object({
+  componentId: Type.String({ minLength: 1 }),
+  paramId: Type.Optional(Type.String({ minLength: 1 })),
+  name: Type.Optional(Type.String({ minLength: 1 })),
+  type: Type.Optional(ComponentParamTypeInputSchema),
+  defaultValue: Type.Optional(Type.Unknown()),
+  required: Type.Optional(Type.Boolean()),
+  description: Type.Optional(Type.String()),
+  enumOptions: Type.Optional(Type.Array(Type.String(), { minItems: 1 })),
+}, { additionalProperties: false })
+export type UpsertComponentParamInput = Static<typeof UpsertComponentParamInputSchema>
+
+export const ExposeComponentParamInputSchema = Type.Object({
+  componentId: Type.String({ minLength: 1 }),
+  nodeId: Type.String({ minLength: 1 }),
+  propKey: Type.String({ minLength: 1 }),
+  name: Type.String({ minLength: 1 }),
+  required: Type.Optional(Type.Boolean()),
+  description: Type.Optional(Type.String()),
+}, { additionalProperties: false })
+export type ExposeComponentParamInput = Static<typeof ExposeComponentParamInputSchema>
+
+export const BindComponentParamInputSchema = Type.Object({
+  componentId: Type.String({ minLength: 1 }),
+  nodeId: Type.String({ minLength: 1 }),
+  propKey: Type.String({ minLength: 1 }),
+  paramId: Type.String({ minLength: 1 }),
+}, { additionalProperties: false })
+export type BindComponentParamInput = Static<typeof BindComponentParamInputSchema>
+
+export const AddComponentSlotInputSchema = Type.Object({
+  componentId: Type.String({ minLength: 1 }),
+  parentNodeId: Type.String({ minLength: 1 }),
+  slotName: Type.String({ minLength: 1 }),
+  index: Type.Optional(Type.Integer({ minimum: 0 })),
+}, { additionalProperties: false })
+export type AddComponentSlotInput = Static<typeof AddComponentSlotInputSchema>
+
+export const InsertComponentInstanceInputSchema = Type.Object({
+  parentId: Type.String({ minLength: 1 }),
+  componentId: Type.String({ minLength: 1 }),
+  index: Type.Optional(Type.Integer({ minimum: 0 })),
+  overrides: Type.Optional(Type.Record(Type.String({ minLength: 1 }), Type.Unknown())),
+}, { additionalProperties: false })
+export type InsertComponentInstanceInput = Static<typeof InsertComponentInstanceInputSchema>
+
+export const SetComponentInstanceOverridesInputSchema = Type.Object({
+  nodeId: Type.String({ minLength: 1 }),
+  overrides: Type.Record(Type.String({ minLength: 1 }), Type.Unknown()),
+}, { additionalProperties: false })
+export type SetComponentInstanceOverridesInput = Static<typeof SetComponentInstanceOverridesInputSchema>
+
+const DecorativeExplorerSectionInputSchema = Type.Union([
+  Type.Literal('components'),
+  Type.Literal('templates'),
+])
+
+export const CreateExplorerFolderInputSchema = Type.Object({
+  section: DecorativeExplorerSectionInputSchema,
+  name: Type.String({ minLength: 1 }),
+}, { additionalProperties: false })
+export type CreateExplorerFolderInput = Static<typeof CreateExplorerFolderInputSchema>
+
+export const MoveExplorerItemInputSchema = Type.Object({
+  section: DecorativeExplorerSectionInputSchema,
+  itemId: Type.String({ minLength: 1 }),
+  folderId: Type.Optional(Type.String({ minLength: 1 })),
+  index: Type.Optional(Type.Integer({ minimum: 0 })),
+}, { additionalProperties: false })
+export type MoveExplorerItemInput = Static<typeof MoveExplorerItemInputSchema>
+
+// ---------------------------------------------------------------------------
 // CSS + class-assignment write tools
 // ---------------------------------------------------------------------------
 
