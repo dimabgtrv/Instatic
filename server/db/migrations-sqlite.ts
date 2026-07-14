@@ -1135,4 +1135,13 @@ export const sqliteMigrations: Migration[] = [
       insert into site_sync_state (id, seq) values (1, 0);
     `,
   },
+  {
+    id: '021_ai_credential_configured_models',
+    sql: `
+      -- Operator-supplied model ids for OpenAI-compatible providers whose
+      -- model catalogue is absent or lives on a non-standard route.
+      alter table ai_provider_credentials
+        add column model_ids_json text not null default '[]';
+    `,
+  },
 ]

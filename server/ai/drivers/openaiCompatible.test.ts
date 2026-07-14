@@ -5,8 +5,8 @@ import type { AiResolvedCredential } from './types'
 const realFetch = globalThis.fetch
 afterEach(() => { globalThis.fetch = realFetch })
 
-function creds(baseUrl: string | null): AiResolvedCredential {
-  return { id: 'c1', providerId: 'openai-compatible', authMode: 'baseUrl', apiKey: 'k', baseUrl }
+function creds(baseUrl: string | null, modelIds: string[] = []): AiResolvedCredential {
+  return { id: 'c1', providerId: 'openai-compatible', authMode: 'baseUrl', apiKey: 'k', baseUrl, modelIds }
 }
 
 describe('openai-compatible driver', () => {
@@ -32,6 +32,30 @@ describe('openai-compatible driver', () => {
     }) as unknown as typeof fetch
     const models = await openaiCompatibleDriver.listModels(creds('https://api.groq.com/openai/v1'))
     expect(models.map((m) => m.id)).toEqual(['llama-3.3-70b'])
+  })
+
+  it('uses configured model ids without requiring a catalogue request', async () => {
+    globalThis.fetch = (async () => {
+      throw new Error('catalogue should not be requested')
+    }) as unknown as typeof fetch
+    const models = await openaiCompatibleDriver.listModels(
+      creds('https://llm-proxy.example/chat/completions', ['tgpt/qwen35-397b-a17b-fp8']),
+    )
+    expect(models).toEqual([expect.objectContaining({
+      id: 'tgpt/qwen35-397b-a17b-fp8',
+      catalogueSource: 'configured',
+    })])
+  })
+
+  it('discovers models next to an exact chat-completions URL', async () => {
+    globalThis.fetch = (async (url: string) => {
+      expect(String(url)).toBe('https://llm-proxy.example/models')
+      return new Response(JSON.stringify({ data: [{ id: 'configured-remotely' }] }), { status: 200 })
+    }) as unknown as typeof fetch
+    const models = await openaiCompatibleDriver.listModels(
+      creds('https://llm-proxy.example/chat/completions'),
+    )
+    expect(models[0]?.id).toBe('configured-remotely')
   })
 
   it('listModels returns [] when the endpoint is unreachable or non-OK', async () => {

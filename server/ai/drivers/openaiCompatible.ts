@@ -20,7 +20,7 @@ import type {
   AiStreamRequest,
 } from './types'
 import { runToolLoop } from './http/toolLoop'
-import { makeChatCompletionsAdapter, normalizeOpenAiBaseUrl } from './http/chatCompletions'
+import { makeChatCompletionsAdapter, resolveModelsUrl } from './http/chatCompletions'
 
 const SUPPORTED_AUTH_MODES: AiAuthMode[] = ['baseUrl']
 
@@ -46,6 +46,8 @@ export const openaiCompatibleDriver: AiProvider = {
 
   async listModels(creds: AiResolvedCredential, signal?: AbortSignal) {
     if (creds.authMode !== 'baseUrl' || !creds.baseUrl) return []
+    const configured = configuredModels(creds.modelIds)
+    if (configured.length > 0) return configured
     return fetchOpenAiCompatibleModels(creds.baseUrl, creds.apiKey, signal)
   },
 
@@ -93,7 +95,7 @@ async function fetchOpenAiCompatibleModels(
   try {
     const headers: Record<string, string> = {}
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`
-    const res = await fetch(`${normalizeOpenAiBaseUrl(baseUrl)}/v1/models`, { headers, signal })
+    const res = await fetch(resolveModelsUrl(baseUrl), { headers, signal })
     if (!res.ok) return []
     const parsed = parseValue(ModelsResponseSchema, await res.json())
     return parsed.data.map((m) => ({
@@ -107,4 +109,13 @@ async function fetchOpenAiCompatibleModels(
     console.error('[ai/openai-compatible] models request failed:', err)
     return []
   }
+}
+
+function configuredModels(modelIds: readonly string[] | undefined): AiProviderModel[] {
+  return (modelIds ?? []).map((id) => ({
+    id,
+    label: id,
+    catalogueSource: 'configured' as const,
+    capabilities: { ...GENERIC_CAPABILITIES },
+  }))
 }

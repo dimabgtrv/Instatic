@@ -155,6 +155,31 @@ export function normalizeOpenAiBaseUrl(url: string): string {
   return trimSlash(url).replace(/\/v1$/, '')
 }
 
+/**
+ * Resolve either an OpenAI-style base URL or a full Chat Completions URL.
+ * Existing credentials keep the historical `/v1/chat/completions` behavior;
+ * proxies that document an unversioned or otherwise custom route can provide
+ * the exact URL ending in `/chat/completions`.
+ */
+export function resolveChatCompletionsUrl(url: string): string {
+  const trimmed = trimSlash(url.trim())
+  if (/\/chat\/completions(?:\?.*)?$/.test(trimmed)) return trimmed
+  return `${normalizeOpenAiBaseUrl(trimmed)}/v1/chat/completions`
+}
+
+/** Resolve the conventional catalogue next to an exact chat endpoint. */
+export function resolveModelsUrl(url: string): string {
+  const trimmed = trimSlash(url.trim())
+  if (/\/chat\/completions(?:\?.*)?$/.test(trimmed)) {
+    const parsed = new URL(trimmed)
+    parsed.pathname = parsed.pathname.replace(/\/chat\/completions$/, '/models')
+    parsed.search = ''
+    parsed.hash = ''
+    return parsed.toString().replace(/\/$/, '')
+  }
+  return `${normalizeOpenAiBaseUrl(trimmed)}/v1/models`
+}
+
 // ---------------------------------------------------------------------------
 // SSE event schema (boundary validation — no `as` on parsed JSON)
 // ---------------------------------------------------------------------------
@@ -333,7 +358,7 @@ export function makeChatCompletionsAdapter(opts: {
   const { baseUrl, apiKey, label } = opts
   return {
     label,
-    endpoint: `${normalizeOpenAiBaseUrl(baseUrl)}/v1/chat/completions`,
+    endpoint: resolveChatCompletionsUrl(baseUrl),
     buildHeaders() {
       const headers: Record<string, string> = { 'content-type': 'application/json' }
       if (apiKey) headers.Authorization = `Bearer ${apiKey}`

@@ -28,6 +28,7 @@ export interface CredentialRecord {
   readonly ciphertext: Uint8Array | null
   readonly iv: Uint8Array | null
   readonly baseUrl: string | null
+  readonly modelIds: readonly string[]
   readonly keyFingerprint: string | null
   readonly createdAt: string
   readonly updatedAt: string
@@ -47,6 +48,7 @@ export interface CredentialView {
   readonly authMode: AiAuthMode
   readonly displayLabel: string
   readonly baseUrl: string | null
+  readonly modelIds: readonly string[]
   readonly keyFingerprintCurrent: boolean
   readonly createdAt: string
   readonly lastUsedAt: string | null
@@ -69,6 +71,7 @@ export type CreateCredentialInput =
       displayLabel: string
       baseUrl: string
       apiKey?: string
+      modelIds?: string[]
     }
 
 /**
@@ -82,4 +85,6 @@ export type UpdateCredentialInput = {
   apiKey?: string
   /** Replace the base URL (baseUrl mode only). */
   baseUrl?: string
+  /** Replace operator-configured model ids for custom providers. */
+  modelIds?: string[]
 }

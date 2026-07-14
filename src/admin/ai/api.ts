@@ -55,6 +55,7 @@ const CredentialViewSchema = Type.Object({
   authMode: AuthMode,
   displayLabel: Type.String(),
   baseUrl: Type.Union([Type.String(), Type.Null()]),
+  modelIds: Type.Array(Type.String()),
   keyFingerprintCurrent: Type.Boolean(),
   createdAt: Type.String(),
   lastUsedAt: Type.Union([Type.String(), Type.Null()]),
@@ -74,6 +75,7 @@ const TestResponseSchema = Type.Object({
   ok: Type.Boolean(),
   modelCount: Type.Optional(Type.Number()),
   error: Type.Optional(Type.String()),
+  verification: Type.Optional(Type.Union([Type.Literal('catalogue'), Type.Literal('configured')])),
 })
 
 const ModelSchema = Type.Object({
@@ -95,7 +97,11 @@ const ModelSchema = Type.Object({
   /** Max context window (total tokens) — feeds the composer context meter. */
   contextWindow: Type.Optional(Type.Number()),
   /** Whether the server returned a live provider model or a local fallback hint. */
-  catalogueSource: Type.Optional(Type.Union([Type.Literal('live'), Type.Literal('fallback')])),
+  catalogueSource: Type.Optional(Type.Union([
+    Type.Literal('live'),
+    Type.Literal('configured'),
+    Type.Literal('fallback'),
+  ])),
 })
 export type AiModel = Static<typeof ModelSchema>
 
@@ -189,6 +195,7 @@ export type CreateCredentialBody =
       displayLabel: string
       baseUrl: string
       apiKey?: string
+      modelIds?: string[]
     }
 
 export async function createCredential(body: CreateCredentialBody): Promise<CredentialView> {
@@ -209,6 +216,7 @@ export interface TestResult {
   ok: boolean
   modelCount?: number
   error?: string
+  verification?: 'catalogue' | 'configured'
 }
 
 export async function testCredential(id: string): Promise<TestResult> {

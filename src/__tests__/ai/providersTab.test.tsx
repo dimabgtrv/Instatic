@@ -57,4 +57,22 @@ describe('ProvidersTab', () => {
     expect(within(dialog).getByLabelText('Bearer token (optional)')).toBeDefined()
     expect(within(dialog).queryByLabelText('API key')).toBeNull()
   })
+
+  it('accepts an exact chat URL, bearer, and configured models for Custom Provider', async () => {
+    mockEmptyCredentials()
+
+    render(<ProvidersTab />)
+    await waitFor(() => expect(screen.getByText('No credentials yet. Add one to start using AI features.')).toBeDefined())
+    fireEvent.click(screen.getByRole('button', { name: 'Add credential' }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Add AI credential' })
+    const provider = within(dialog).getByRole('combobox', { name: 'Provider' })
+    fireEvent.click(provider.nextElementSibling as HTMLElement)
+    fireEvent.click(screen.getByRole('option', { name: 'Custom Provider' }))
+
+    expect(within(dialog).getByLabelText('Base URL or Chat Completions URL')).toBeDefined()
+    expect(within(dialog).getByLabelText('Bearer token (optional)')).toBeDefined()
+    expect(within(dialog).getByLabelText('Model IDs (optional)')).toBeDefined()
+    expect(within(dialog).queryByLabelText('API key')).toBeNull()
+  })
 })

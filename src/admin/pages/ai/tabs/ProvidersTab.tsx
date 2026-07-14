@@ -174,6 +174,12 @@ export function ProvidersTab() {
                         <span>Last used {new Date(cred.lastUsedAt).toLocaleString()}</span>
                       </>
                     )}
+                    {cred.modelIds.length > 0 && (
+                      <>
+                        <span>·</span>
+                        <span>{cred.modelIds.length} configured model{cred.modelIds.length === 1 ? '' : 's'}</span>
+                      </>
+                    )}
                   </div>
                   {result && (
                     <p
@@ -181,7 +187,9 @@ export function ProvidersTab() {
                       className={`${styles.testResult} ${result.ok ? styles.success : styles.danger}`}
                     >
                       {result.ok
-                        ? `✓ Test ok (${result.modelCount ?? 0} models available)`
+                        ? result.verification === 'configured'
+                          ? `✓ Ready (${result.modelCount ?? 0} configured models; connection verifies on first message)`
+                          : `✓ Test ok (${result.modelCount ?? 0} models available)`
                         : `✗ ${result.error ?? 'Test failed.'}`}
                     </p>
                   )}
@@ -238,6 +246,7 @@ async function submitCredential(
   displayLabel: string,
   apiKey: string,
   baseUrl: string,
+  modelIds: string[],
   onCreated: () => void,
   setError: (error: string | null) => void,
   setBusy: (busy: boolean) => void,
@@ -251,6 +260,7 @@ async function submitCredential(
       } : {
         providerId, authMode: 'baseUrl', displayLabel, baseUrl,
         ...(apiKey ? { apiKey } : {}),
+        ...(providerId === 'openai-compatible' && modelIds.length > 0 ? { modelIds } : {}),
       }
     await createCredential(body)
     onCreated()
@@ -282,6 +292,7 @@ function AddCredentialDialog({
   const [displayLabel, setDisplayLabel] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
+  const [modelIdsText, setModelIdsText] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -289,10 +300,16 @@ function AddCredentialDialog({
   const effectiveAuthMode = providerSpec.authMode
   const baseUrlPlaceholder =
     providerId === 'ollama' ? 'http://localhost:11434' : 'https://api.groq.com/openai/v1'
+  const modelIds = [...new Set(
+    modelIdsText
+      .split(/[\n,]/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )]
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    await submitCredential(effectiveAuthMode, providerId, displayLabel, apiKey, baseUrl, onCreated, setError, setBusy)
+    await submitCredential(effectiveAuthMode, providerId, displayLabel, apiKey, baseUrl, modelIds, onCreated, setError, setBusy)
   }
 
   return (
@@ -360,7 +377,9 @@ function AddCredentialDialog({
         {effectiveAuthMode === 'baseUrl' && (
           <>
             <div className={styles.dialogField}>
-              <label htmlFor={baseUrlInputId} className={styles.dialogFieldLabel}>Base URL</label>
+              <label htmlFor={baseUrlInputId} className={styles.dialogFieldLabel}>
+                {providerId === 'openai-compatible' ? 'Base URL or Chat Completions URL' : 'Base URL'}
+              </label>
               <Input
                 id={baseUrlInputId}
                 value={baseUrl}
@@ -371,7 +390,7 @@ function AddCredentialDialog({
             </div>
             <div className={styles.dialogField}>
               <label htmlFor={apiKeyInputId} className={styles.dialogFieldLabel}>
-                {providerId === 'ollama' ? 'Bearer token (optional)' : 'API key (optional)'}
+                Bearer token (optional)
               </label>
               <Input
                 id={apiKeyInputId}
@@ -388,6 +407,22 @@ function AddCredentialDialog({
                 data-form-type="other"
               />
             </div>
+            {providerId === 'openai-compatible' && (
+              <div className={styles.dialogField}>
+                <label htmlFor={`${baseUrlInputId}-models`} className={styles.dialogFieldLabel}>
+                  Model IDs (optional)
+                </label>
+                <Input
+                  id={`${baseUrlInputId}-models`}
+                  value={modelIdsText}
+                  onChange={(e) => setModelIdsText(e.currentTarget.value)}
+                  placeholder="e.g. provider/model-name"
+                />
+                <p className={styles.secondaryText}>
+                  Separate multiple IDs with commas. Configure these when the provider has no models endpoint.
+                </p>
+              </div>
+            )}
           </>
         )}
 

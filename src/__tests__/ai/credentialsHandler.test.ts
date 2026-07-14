@@ -256,4 +256,42 @@ describe('AI credential handler', () => {
     expect(body.modelCount).toBeUndefined()
     expect(body.error).toContain('No live models were returned')
   })
+
+  it('stores configured custom-provider models and seeds a usable default', async () => {
+    const cookie = await harness.setupOwner()
+    globalThis.fetch = async () => {
+      throw new Error('configured models must not require catalogue discovery')
+    }
+
+    const createRes = await harness.ai('/admin/api/ai/credentials', {
+      method: 'POST',
+      cookie,
+      json: {
+        providerId: 'openai-compatible',
+        authMode: 'baseUrl',
+        displayLabel: 'Corporate proxy',
+        baseUrl: 'https://llm-proxy.example/chat/completions',
+        apiKey: 'corporate-secret',
+        modelIds: ['tgpt/qwen35-397b-a17b-fp8', 'tgpt/qwen35-397b-a17b-fp8'],
+      },
+    })
+    expect(createRes.status).toBe(201)
+    const created = await readJson<{ credential: { id: string; modelIds: string[] } }>(createRes)
+    expect(created.credential.modelIds).toEqual(['tgpt/qwen35-397b-a17b-fp8'])
+
+    const testRes = await harness.ai(`/admin/api/ai/credentials/${created.credential.id}/test`, {
+      method: 'POST',
+      cookie,
+    })
+    expect(await readJson(testRes)).toMatchObject({
+      ok: true,
+      modelCount: 1,
+      verification: 'configured',
+    })
+
+    const { rows } = await harness.db<{ model_id: string }>`
+      select model_id from ai_defaults where scope = 'site'
+    `
+    expect(rows[0]?.model_id).toBe('tgpt/qwen35-397b-a17b-fp8')
+  })
 })

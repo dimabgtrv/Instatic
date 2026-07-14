@@ -38,6 +38,8 @@ export interface AiResolvedCredential {
   readonly authMode: AiAuthMode
   readonly apiKey: string | null
   readonly baseUrl: string | null
+  /** Operator-configured model ids used when a provider has no catalogue. */
+  readonly modelIds?: readonly string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +92,7 @@ export interface AiProviderModel {
    * picker affordances when a live catalogue is unavailable; those entries must
    * not be used for automatic defaults or credential health checks.
    */
-  readonly catalogueSource?: 'live' | 'fallback'
+  readonly catalogueSource?: 'live' | 'configured' | 'fallback'
 }
 
 // ---------------------------------------------------------------------------

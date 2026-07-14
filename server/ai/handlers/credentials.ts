@@ -53,6 +53,7 @@ const CreateBodySchema = Type.Union([
     displayLabel: Type.String({ minLength: 1 }),
     baseUrl: Type.String({ minLength: 1 }),
     apiKey: Type.Optional(Type.String()),
+    modelIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 100 })),
   }),
 ])
 
@@ -60,6 +61,7 @@ const UpdateBodySchema = Type.Object({
   displayLabel: Type.Optional(Type.String({ minLength: 1 })),
   apiKey: Type.Optional(Type.String()),
   baseUrl: Type.Optional(Type.String()),
+  modelIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 100 })),
 })
 
 // ---------------------------------------------------------------------------
@@ -322,7 +324,10 @@ async function dispatchTest(req: Request, db: DbClient, id: string): Promise<Res
         modelCount,
       },
     })
-    return jsonResponse({ ok: true, modelCount })
+    const verification = models.some((model) => model.catalogueSource === 'configured')
+      ? 'configured'
+      : 'catalogue'
+    return jsonResponse({ ok: true, modelCount, verification })
   } catch (err) {
     const message = safeCredentialErrorMessage(err, [apiKeyForRedaction], 'Test failed.')
     await createAuditEvent(db, {

@@ -6,6 +6,10 @@ This project is pre-1.0. Breaking changes may appear in minor or patch releases 
 
 ## Unreleased
 
+### AI and integrations
+
+- Extended Custom Provider credentials with exact Chat Completions URLs and operator-configured model IDs, so OpenAI-style corporate proxies can work without `/v1` routing or a models catalogue.
+
 ## 0.0.11 - 2026-07-11
 
 ### AI and integrations

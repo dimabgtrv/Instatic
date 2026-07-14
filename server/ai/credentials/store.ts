@@ -52,6 +52,7 @@ interface CredentialRow {
   ciphertext: Uint8Array | null
   iv: Uint8Array | null
   base_url: string | null
+  model_ids_json: unknown
   key_fingerprint: string | null
   created_at: Date | string
   updated_at: Date | string
@@ -68,6 +69,7 @@ function rowToRecord(row: CredentialRow): CredentialRecord {
     ciphertext: row.ciphertext,
     iv: row.iv,
     baseUrl: row.base_url,
+    modelIds: stringArray(row.model_ids_json),
     keyFingerprint: row.key_fingerprint,
     createdAt: isoDateOrNull(row.created_at)!,
     updatedAt: isoDateOrNull(row.updated_at)!,
@@ -93,6 +95,7 @@ export async function toCredentialView(
     authMode: record.authMode,
     displayLabel: record.displayLabel,
     baseUrl: record.baseUrl,
+    modelIds: record.modelIds,
     keyFingerprintCurrent:
       record.keyFingerprint === null
         ? true
@@ -134,7 +137,7 @@ export async function listCredentialsForUser(
 ): Promise<CredentialRecord[]> {
   const { rows } = await db<CredentialRow>`
     select id, user_id, provider_id, auth_mode, display_label,
-           ciphertext, iv, base_url, key_fingerprint,
+           ciphertext, iv, base_url, model_ids_json, key_fingerprint,
            created_at, updated_at, last_used_at
     from ai_provider_credentials
     where user_id = ${userId}
@@ -156,7 +159,7 @@ export async function readCredentialForUser(
 ): Promise<CredentialRecord | null> {
   const { rows } = await db<CredentialRow>`
     select id, user_id, provider_id, auth_mode, display_label,
-           ciphertext, iv, base_url, key_fingerprint,
+           ciphertext, iv, base_url, model_ids_json, key_fingerprint,
            created_at, updated_at, last_used_at
     from ai_provider_credentials
     where id = ${credentialId} and user_id = ${userId}
@@ -219,6 +222,7 @@ export async function resolveCredentialForDriver(
     authMode: record.authMode,
     apiKey,
     baseUrl: record.baseUrl,
+    modelIds: record.modelIds,
   }
 }
 
@@ -255,22 +259,24 @@ export async function createCredentialForUser(
   }
   const baseUrl =
     input.authMode === 'baseUrl' ? input.baseUrl : null
+  const modelIds = normalizeModelIds(input.authMode === 'baseUrl' ? input.modelIds : undefined)
 
   try {
     const { rows } = await db<CredentialRow>`
       insert into ai_provider_credentials (
         id, user_id, provider_id, auth_mode, display_label,
-        ciphertext, iv, base_url, key_fingerprint
+        ciphertext, iv, base_url, model_ids_json, key_fingerprint
       )
       values (
         ${id}, ${userId}, ${input.providerId}, ${input.authMode}, ${input.displayLabel},
         ${encrypted?.ciphertext ?? null},
         ${encrypted?.iv ?? null},
         ${baseUrl},
+        ${modelIds},
         ${fingerprint}
       )
       returning id, user_id, provider_id, auth_mode, display_label,
-                ciphertext, iv, base_url, key_fingerprint,
+                ciphertext, iv, base_url, model_ids_json, key_fingerprint,
                 created_at, updated_at, last_used_at
     `
     return rowToRecord(rows[0]!)
@@ -319,6 +325,9 @@ export async function updateCredentialForUser(
   const nextLabel = patch.displayLabel ?? existing.displayLabel
   const nextBaseUrl =
     patch.baseUrl !== undefined ? patch.baseUrl : existing.baseUrl
+  const nextModelIds = patch.modelIds !== undefined
+    ? normalizeModelIds(patch.modelIds)
+    : existing.modelIds
 
   let nextCiphertext = existing.ciphertext
   let nextIv = existing.iv
@@ -357,11 +366,12 @@ export async function updateCredentialForUser(
           ciphertext = ${nextCiphertext},
           iv = ${nextIv},
           base_url = ${nextBaseUrl},
+          model_ids_json = ${nextModelIds},
           key_fingerprint = ${nextFingerprint},
           updated_at = current_timestamp
       where id = ${credentialId} and user_id = ${userId}
       returning id, user_id, provider_id, auth_mode, display_label,
-                ciphertext, iv, base_url, key_fingerprint,
+                ciphertext, iv, base_url, model_ids_json, key_fingerprint,
                 created_at, updated_at, last_used_at
     `
     return rows[0] ? rowToRecord(rows[0]) : null
@@ -432,6 +442,23 @@ function isUniqueViolation(err: unknown): boolean {
   if (!(err instanceof Error)) return false
   const msg = err.message.toLowerCase()
   return msg.includes('unique') || msg.includes('23505') || msg.includes('duplicate')
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return normalizeModelIds(value.filter((item): item is string => typeof item === 'string'))
+}
+
+function normalizeModelIds(value: readonly string[] | undefined): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const item of value ?? []) {
+    const modelId = item.trim()
+    if (!modelId || seen.has(modelId)) continue
+    seen.add(modelId)
+    out.push(modelId)
+  }
+  return out
 }
 
 function isFkViolation(err: unknown): boolean {

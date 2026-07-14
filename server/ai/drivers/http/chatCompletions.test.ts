@@ -4,6 +4,9 @@ import {
   ChatCompletionsTurnTranslator,
   trimSlash,
   normalizeOpenAiBaseUrl,
+  resolveChatCompletionsUrl,
+  resolveModelsUrl,
+  makeChatCompletionsAdapter,
 } from './chatCompletions'
 import type { SseFrame } from './sse'
 
@@ -26,6 +29,32 @@ describe('chatCompletions shared adapter', () => {
     // Ollama-style URL with no path — no-op.
     expect(normalizeOpenAiBaseUrl('http://localhost:11434')).toBe('http://localhost:11434')
     expect(normalizeOpenAiBaseUrl('http://localhost:11434/')).toBe('http://localhost:11434')
+  })
+
+  it('uses a full chat-completions URL verbatim and resolves its sibling catalogue', () => {
+    const exact = 'https://llm-proxy.example/chat/completions'
+    expect(resolveChatCompletionsUrl(exact)).toBe(exact)
+    expect(resolveModelsUrl(exact)).toBe('https://llm-proxy.example/models')
+  })
+
+  it('keeps legacy base URL routing for standard compatible providers', () => {
+    expect(resolveChatCompletionsUrl('https://api.groq.com/openai/v1'))
+      .toBe('https://api.groq.com/openai/v1/chat/completions')
+    expect(resolveModelsUrl('https://api.groq.com/openai/v1'))
+      .toBe('https://api.groq.com/openai/v1/models')
+  })
+
+  it('sends the raw configured secret as one Bearer prefix to an exact endpoint', () => {
+    const adapter = makeChatCompletionsAdapter({
+      baseUrl: 'https://llm-proxy.example/chat/completions',
+      apiKey: 'corporate-secret',
+      label: 'Custom Provider',
+    })
+    expect(adapter.endpoint).toBe('https://llm-proxy.example/chat/completions')
+    expect(adapter.buildHeaders({} as never)).toEqual({
+      'content-type': 'application/json',
+      Authorization: 'Bearer corporate-secret',
+    })
   })
 
   it('mapChatHistory prepends the system prompt as a system message', () => {
